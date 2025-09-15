@@ -1,0 +1,74 @@
+[
+  {
+    "tipo": "Anual",
+    "valores": {
+      "Ene": 50,
+      "Feb": 100,
+      "Mar": 200,
+      "Abr": 100,
+      "May": 300,
+      "Jun": 250,
+      "Jul": 350,
+      "Ago": 200,
+      "Sep": 200,
+      "Oct": 350,
+      "Nov": 250,
+      "Dic": 100
+    },
+    "total": 1000
+  },
+  {
+    "tipo": "2 años",
+    "valores": {
+      "Ene": 50,
+      "Feb": 100,
+      "Mar": 100,
+      "Abr": 100,
+      "May": 150,
+      "Jun": 100,
+      "Jul": 150,
+      "Ago": 100,
+      "Sep": 50,
+      "Oct": 100,
+      "Nov": 50,
+      "Dic": 50
+    },
+    "total": 1800
+  },
+  {
+    "tipo": "Mensual",
+    "valores": {
+      "Ene": 550,
+      "Feb": 50,
+      "Mar": 50,
+      "Abr": 50,
+      "May": -450,
+      "Jun": 50,
+      "Jul": 50,
+      "Ago": 50,
+      "Sep": 0,
+      "Oct": 50,
+      "Nov": 50,
+      "Dic": 0
+    },
+    "total": 100
+  },
+  {
+    "tipo": "De por vida",
+    "valores": {
+      "Ene": 0,
+      "Feb": 50,
+      "Mar": 100,
+      "Abr": 50,
+      "May": 0,
+      "Jun": 100,
+      "Jul": 0,
+      "Ago": 0,
+      "Sep": 50,
+      "Oct": 0,
+      "Nov": 100,
+      "Dic": 50
+    },
+    "total": 5000
+  }
+]
