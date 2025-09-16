@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Análisis de géneros — ECharts</title>
+  <style>
+    body { font-family: Inter, system-ui, Arial; margin: 0; padding: 16px; background: #f7f7f8; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    #controls { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+    #chart { width:100%; height:640px; background:#ffffff; border-radius:8px; box-shadow:0 6px 18px rgba(20,20,30,0.06); }
+    .hint { color:#666; font-size:13px; }
+    select, input[type=number] { padding:6px 8px; border-radius:6px; border:1px solid #ddd; }
+  </style>
+  <!-- ECharts -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+  <h1>Análisis de géneros por año — rating vs "taquilla" (numVotes)</h1>
+  <div id="controls">
+    <label class="hint">Mostrar hasta</label>
+    <input id="topGenres" type="number" min="1" max="50" value="8" style="width:72px;" />
+    <label class="hint">géneros (por volumen total de votos) ·</label>
+    <label class="hint">Rango de años:</label>
+    <select id="yearFrom"></select>
+    <span class="hint">→</span>
+    <select id="yearTo"></select>
+    <button id="recalc">Actualizar</button>
+    <button id="toggleAll">Ocultar todas</button>
+    <div style="flex:1"></div>
+    <div class="hint">Tooltip: clic en una serie para resaltarla.</div>
+  </div>
+
+  <div id="chart"></div>
+
+  <script>
+    const chartDom = document.getElementById('chart');
+    const myChart = echarts.init(chartDom, null, { renderer: 'canvas' });
+
+    async function loadData() {
+      const res = await fetch('data.json');
+      if (!res.ok) throw new Error('No se pudo cargar data.json — asegúrate de servir el archivo desde un servidor (no file://)');
+      const arr = await res.json();
+      return arr;
+    }
+
+    function prepareAggregates(data) {
+      const cleaned = data.map(d => ({
+        title: d.primaryTitle || '',
+        year: parseInt(d.startYear, 10),
+        genres: (d.genres || '').split(',').map(s => s.trim()).filter(Boolean),
+        rating: isNaN(parseFloat(d.averageRating)) ? null : parseFloat(d.averageRating),
+        votes: isNaN(parseInt(d.numVotes, 10)) ? 0 : parseInt(d.numVotes, 10)
+      })).filter(d => Number.isInteger(d.year) && d.year > 0 && d.genres.length > 0 && d.rating !== null);
+
+      const agg = {};
+      const genreTotals = {};
+      const yearsSet = new Set();
+
+      for (const r of cleaned) {
+        yearsSet.add(r.year);
+        for (const g of r.genres) {
+          agg[g] = agg[g] || {};
+          const yearObj = agg[g][r.year] || { sumWeightedRating: 0, sumVotes: 0, count: 0, titles: [] };
+          yearObj.sumWeightedRating += r.rating * r.votes;
+          yearObj.sumVotes += r.votes;
+          yearObj.count += 1;
+          yearObj.titles.push(r.title + ' (' + r.rating + ' ★, ' + r.votes + ' votes)');
+          agg[g][r.year] = yearObj;
+          genreTotals[g] = (genreTotals[g] || 0) + r.votes;
+        }
+      }
+
+      const years = Array.from(yearsSet).sort((a,b)=>a-b);
+      return { agg, genreTotals, years };
+    }
+
+    function buildSeries(agg, years, selectedGenres) {
+        const series = [];
+        const genreColors = {}; // mapa de colores asignados por género
+
+        // paleta de colores base
+        const palette = [
+            '#5470C6', '#91CC75', '#FAC858', '#EE6666',
+            '#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC'
+        ];
+        let colorIndex = 0;
+
+        for (const g of selectedGenres) {
+            // asignar un color fijo por género
+            if (!genreColors[g]) {
+                genreColors[g] = palette[colorIndex % palette.length];
+                colorIndex++;
+            }
+            const points = [];
+            for (const y of years) {
+            const yobj = agg[g] && agg[g][y];
+            if (yobj && yobj.sumVotes > 0) {
+                const weightedAvg = yobj.sumWeightedRating / yobj.sumVotes;
+                points.push({
+                    name: g,
+                    value: [y, +(weightedAvg.toFixed(2)), yobj.sumVotes, yobj.count, yobj.titles.join('\n')]
+                });
+            }
+        }
+
+        // scatter: puntos
+        series.push({
+          name: g,
+          type: 'scatter',
+          symbolSize: function (dataItem) {
+            const votes = dataItem[2] || 1;
+            // Escala reducida: puntos más pequeños
+            return Math.max(4, Math.sqrt(votes) / 20);
+          },
+          emphasis: { focus: 'series' },
+          data: points,
+          showSymbol: true,
+          color: genreColors[g]
+        });
+
+        const linePoints = (agg[g] ? Object.keys(agg[g]).map(y=>[+y, +( (agg[g][y].sumWeightedRating/agg[g][y].sumVotes).toFixed(2) )]) : []).sort((a,b)=>a[0]-b[0]);
+        if (linePoints.length > 0) {
+          series.push({
+            name: g + ' — tendencia',
+            type: 'line',
+            smooth: true,
+            showSymbol: false,
+            lineStyle: { width: 2 },
+            data: linePoints,
+            emphasis: { focus: 'series' },
+            color: genreColors[g]
+          });
+        }
+      }
+      return series;
+    }
+
+    function renderChart(agg, genreTotals, years, topN = 8, yearFrom=null, yearTo=null) {
+      const sortedGenres = Object.keys(genreTotals).sort((a,b)=>genreTotals[b]-genreTotals[a]);
+      const selected = sortedGenres.slice(0, topN);
+
+      const availableYears = years.slice();
+      const yFrom = yearFrom || availableYears[0];
+      const yTo = yearTo || availableYears[availableYears.length-1];
+      const yearsFiltered = availableYears.filter(y => y >= yFrom && y <= yTo);
+
+      const series = buildSeries(agg, yearsFiltered, selected);
+        const legendNames = series.map(s => s.name);
+
+      const option = {
+        title: { text: 'Rating promedio ponderado por votos — puntos = año (tamaño = votos)', left: 'center' },
+        tooltip: {
+          trigger: 'item',
+          formatter: function (params) {
+            if (params.seriesType === 'scatter') {
+              const v = params.value;
+              return '<b>' + params.seriesName + '</b><br/>' +
+                'Año: ' + v[0] + '<br/>' +
+                'Rating ponderado: ' + v[1] + ' ★<br/>' +
+                'Total votes: ' + v[2] + '<br/>' +
+                'Películas en el agregado: ' + v[3] + '<br/><hr style="margin:6px 0;">';
+            }
+            return echarts.format.print(params);
+          }
+        },
+        legend: {
+            type: 'scroll',
+            orient: 'horizontal',
+            bottom: 50,          // posición en la parte inferior
+            left: 'center',
+            align: 'auto',
+            padding: [5, 5, 5, 5], // margen extra abajo
+            data: legendNames,   // <-- Aquí asignamos los nombres
+            selected: legendNames.reduce((acc, name) => {
+                acc[name] = true; // por defecto todas visibles
+                return acc;
+            }, {})
+        },
+        grid: { left: 60, right: 60, bottom: 100, top: 100 },
+        xAxis: {
+          name: 'Año',
+          type: 'value',
+          min: Math.min(...yearsFiltered) - 1,
+          max: Math.max(...yearsFiltered) + 1,
+          axisLabel: { formatter: '{value}' }
+        },
+        yAxis: {
+          name: 'Rating promedio (ponderado por votos)',
+          min: 0,
+          max: 10
+        },
+        toolbox: {
+          feature: {
+            saveAsImage: {},
+            dataZoom: { yAxisIndex: 'none' }
+          }
+        },
+        dataZoom: [
+          { type: 'inside', xAxisIndex: 0 },
+          { show: true, xAxisIndex: 0 }
+        ],
+        series: series
+      };
+
+      myChart.setOption(option);
+    }
+
+    (async function main() {
+      try {
+        const raw = await loadData();
+        const { agg, genreTotals, years } = prepareAggregates(raw);
+
+        const yFromSel = document.getElementById('yearFrom');
+        const yToSel = document.getElementById('yearTo');
+        yFromSel.innerHTML = '';
+        yToSel.innerHTML = '';
+        for (const y of years) {
+          const o1 = document.createElement('option'); o1.value = y; o1.textContent = y;
+          const o2 = document.createElement('option'); o2.value = y; o2.textContent = y;
+          yFromSel.appendChild(o1); yToSel.appendChild(o2);
+        }
+        yFromSel.value = years[0];
+        yToSel.value = years[years.length-1];
+
+        function update() {
+          const topN = Math.max(1, Math.min(50, parseInt(document.getElementById('topGenres').value || '8')));
+          const yf = parseInt(yFromSel.value,10);
+          const yt = parseInt(yToSel.value,10);
+          renderChart(agg, genreTotals, years, topN, yf, yt);
+        }
+
+        function toggleAll() {
+            const option = myChart.getOption();
+            const legendData = option.legend[0].data || [];
+            const currentlyVisible = legendData.some(name => option.legend[0].selected[name]);
+
+            // Si al menos una serie está visible, ocultamos todas; si todas ocultas, mostramos todas
+            const newSelection = {};
+            legendData.forEach(name => {
+                newSelection[name] = currentlyVisible ? false : true;
+            });
+
+            myChart.setOption({
+                legend: {
+                selected: newSelection
+                }
+            });
+
+            toggleBtn.textContent = currentlyVisible ? 'Mostrar todas' : 'Ocultar todas';
+        }
+
+        document.getElementById('recalc').addEventListener('click', update);
+        document.getElementById('topGenres').addEventListener('change', update);
+        document.getElementById('toggleAll').addEventListener('click', toggleAll);
+        yFromSel.addEventListener('change', () => { if (parseInt(yFromSel.value) > parseInt(yToSel.value)) yToSel.value = yFromSel.value; });
+        yToSel.addEventListener('change', () => { if (parseInt(yToSel.value) < parseInt(yFromSel.value)) yFromSel.value = yToSel.value; });
+
+        update();
+        window.addEventListener('resize', () => myChart.resize());
+
+      } catch (err) {
+        chartDom.innerHTML = '<div style="padding:20px;color:#b00">Error: ' + err.message + '</div>';
+        console.error(err);
+      }
+    })();
+
+  </script>
+</body>
+</html>
