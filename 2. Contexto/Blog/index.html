@@ -18,9 +18,9 @@
 // Función para clasificar duración
 function durationCategory(minutes) {
     minutes = parseInt(minutes);
-    if (minutes < 30) return "Corto (<30 min)";
-    if (minutes <= 120) return "Medio (30-90 min)";
-    return "Largo (>90 min)";
+    if (minutes < 30) return "Corta";
+    if (minutes <= 120) return "Media";
+    return "Larga";
 }
 
 // Función para clasificar rating
@@ -31,37 +31,65 @@ function ratingCategory(rating) {
     return "8-10";
 }
 
+// Categorizar votos en 5 rangos
+function votesCategory(votes, maxVotes) {
+    // Reducir la escala al 1% para no tener valores enormes
+    votes = votes * 0.01;
+
+    const t = votes / maxVotes; // Normalizado entre 0 y 1
+    if (t < 0.2) return { label: '$', color: '#E6F5FF' };
+    if (t < 0.4) return { label: '$$', color: '#8AD2FF' };
+    if (t < 0.6) return { label: '$$$', color: '#009DFF' };
+    if (t < 0.8) return { label: '$$$$', color: '#004875' };
+    return { label: '$$$$$', color: '#00101A' };
+}
+
+// Filtrar top N géneros y crear nodo "Otros" con votos acumulados
+function topCategoriesWithVotes(data, topN = 4, maxVotes) {
+    const entries = Object.entries(data);
+    entries.sort((a, b) => b[1].count - a[1].count);
+
+    const top = entries.slice(0, topN);
+    const others = entries.slice(topN);
+
+    const result = {};
+
+    top.forEach(([genre, val]) => {
+    const cat = votesCategory(val.votes, maxVotes);
+    result[genre] = {
+        children: [{
+            name: cat.label,
+            value: val.count,      // <-- usar count en lugar de votes
+            itemStyle: { color: cat.color }
+        }]
+    };
+});
+
+if (others.length > 0) {
+    const totalCount = others.reduce((sum, [, val]) => sum + val.count, 0);
+    const cat = votesCategory(others.reduce((sum, [, val]) => sum + val.votes, 0), maxVotes);
+    result["Otros"] = {
+        children: [{
+            name: cat.label,
+            value: totalCount,     // <-- usar count aquí también
+            itemStyle: { color: cat.color }
+        }]
+    };
+}
+
+    return result;
+}
+
 // Cargar datos desde JSON
 fetch('data.json')
 .then(response => response.json())
 .then(data => {
-    // Filtrar películas con al menos 50 votos para evitar outliers
+    // Filtrar películas con al menos 50 votos
     const filtered = data.filter(d => parseInt(d.numVotes) >= 50);
 
-    // Construir estructura jerárquica
     const sunburstData = {};
+    let maxVotes = 0;
 
-    function topCategories(data, topN = 4) {
-        // data es un objeto con key=genre, value=count
-        const entries = Object.entries(data);
-        // Ordenar descendente por cantidad
-        entries.sort((a, b) => b[1] - a[1]);
-
-        const top = entries.slice(0, topN); // Top N
-        const others = entries.slice(topN); // Las demás
-
-        const result = {};
-        top.forEach(([genre, count]) => result[genre] = count);
-
-        if (others.length > 0) {
-            // Agrupar las demás en "Otros"
-            result["Otros"] = others.reduce((sum, [, count]) => sum + count, 0);
-        }
-
-        return result;
-    }
-
-    // Al construir la jerarquía:
     filtered.forEach(movie => {
         const genres = movie.genres.split(',');
         const runtimeCat = durationCategory(movie.runtimeMinutes);
@@ -70,38 +98,53 @@ fetch('data.json')
         if (!sunburstData[ratingCat]) sunburstData[ratingCat] = {};
         if (!sunburstData[ratingCat][runtimeCat]) sunburstData[ratingCat][runtimeCat] = {};
 
-        // Contar todas las categorías
         genres.forEach(genre => {
             if (!sunburstData[ratingCat][runtimeCat][genre])
-                sunburstData[ratingCat][runtimeCat][genre] = 0;
-            sunburstData[ratingCat][runtimeCat][genre] += 1;
+                sunburstData[ratingCat][runtimeCat][genre] = { count: 0, votes: 0 };
+            sunburstData[ratingCat][runtimeCat][genre].count += 1;
+            sunburstData[ratingCat][runtimeCat][genre].votes += parseInt(movie.numVotes);
+            // Registrar el máximo de votos para normalización
+            maxVotes = Math.max(maxVotes, sunburstData[ratingCat][runtimeCat][genre].votes * 0.01);
         });
     });
 
-    // Luego, aplicar topCategories a cada rating → duration:
+    // Aplicar topCategoriesWithVotes a cada rating → duración
     for (const rating in sunburstData) {
         for (const duration in sunburstData[rating]) {
-            sunburstData[rating][duration] = topCategories(sunburstData[rating][duration], 4);
+            sunburstData[rating][duration] = topCategoriesWithVotes(
+                sunburstData[rating][duration], 4, maxVotes
+            );
         }
     }
 
-
-    // Convertir a formato de ECharts
+    // Convertir a formato ECharts
     function convertToECharts(data) {
         return Object.keys(data).map(key => {
             const value = data[key];
-            if (typeof value === 'number') {
-                return { name: key, value: value };
+            if (value.value !== undefined) {
+                return { name: key, value: value.value, itemStyle: value.itemStyle };
+            } else if (value.children) {
+                return {
+                    name: key,
+                    children: convertToECharts(
+                        value.children.reduce((acc, child) => {
+                            acc[child.name] = child;
+                            return acc;
+                        }, {})
+                    )
+                };
             } else {
                 return { name: key, children: convertToECharts(value) };
             }
         });
     }
 
+    const chart = echarts.init(document.getElementById('main'));
+
     const option = {
       title: {
-        text: 'Peliculas',
-        subtext: 'Caracteristicas de peliculas categorizadas por rating',
+        text: 'Carácteristicas de las peliculas',
+        subtext: 'El ángulo de las porciones depende de la cantidad de peliculas registradas.',
         left: 'center',
         top: '0%'
       },
@@ -120,7 +163,7 @@ fetch('data.json')
           {},
           {
             r0: '10%',
-            r: '25%',
+            r: '18%',
             itemStyle: {
               borderWidth: 2
             },
@@ -129,19 +172,18 @@ fetch('data.json')
             }
           },
           {
-            r0: '25%',
-            r: '60%',
+            r0: '20%',
+            r: '43%',
             label: {
               align: 'right',
               padding: [0, 10, 0, 10]
             }
           },
           {
-            r0: '60%',
-            r: '65%',
+            r0: '45%',
+            r: '68%',
             label: {
               fontSize: 10,
-              position: 'outside',
               padding: 30,
               align: 'right',      // Alineación del texto
               formatter: '{b}',
@@ -156,6 +198,19 @@ fetch('data.json')
             itemStyle: {
               borderWidth: 3
             }
+          },
+          {
+            r0: '70%',
+            r: '75%',
+            label: {
+              fontSize: 12,
+              position: 'outside',
+              formatter: params => params.data.labelCat || params.data.name,
+              hideOverlap: true
+            },
+            itemStyle: {
+              borderWidth: 2
+            }
           }
         ],
         emphasis: {
@@ -167,13 +222,26 @@ fetch('data.json')
         }
       },
       tooltip: {
-        formatter: info => `${info.name}: ${info.value} películas`
+          formatter: function(info) {
+              const level = info.treePathInfo.length; // 1 = primer nivel, 2 = segundo, etc.
+              switch(level) {
+                  case 2:
+                      return `Rating: ${info.name}`;
+                  case 3:
+                      return `Duración: ${info.name}`;
+                  case 4:
+                      return `Género: ${info.name}<br>Cantidad de películas: ${info.value}`;
+                  case 5:
+                      return `Recaudación: ${info.name}<br>Cantidad de películas: ${info.value}`;
+                  default:
+                      return `${info.name}: ${info.value}`;
+              }
+          }
       }
+
     };
 
-    const chart = echarts.init(document.getElementById('main'));
     chart.setOption(option);
-
 });
 </script>
 </body>
