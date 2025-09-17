@@ -15,6 +15,9 @@ python -m http.server 8000
 
 Habiendo hecho esto, podremos acceder a las visualizaciones utilizando cualquier navegador, buscando la siguiente ruta:
 
+IMPORTANTE: Es recomendable usar un navegador de incognito para ejecutar esto, y luego 
+al querer abrir otro servidor para otra visualizacion, cerrar y abrir otra ventana de incognito.
+
 http://localhost:8000/#
 
 Se puede dejar de ejecutar el proceso:

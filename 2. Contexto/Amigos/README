@@ -2,7 +2,13 @@ Para ejecutar el codigo se debe contar con Python instalado.
 
 https://www.python.org/downloads/
 
-Una vez realizado esto, se debe abrir una consola/terminal dentro de la carpeta que contiene los archivos.
+Adicionalmente se debe descomprimir el archivo data.zip, que contiene el archivo data.json del cual se consume
+la informacion para poder cargar las visualizaciones.
+
+1. Descomprimir el archivo data.zip.
+2. Mover/Copiar el archivo data.json dentro de la carpeta /Amigos
+
+Una vez realizado esto, se debe abrir una consola/terminal dentro de la carpeta que contiene los archivos (/Amigos).
 
 Mismo proceso tanto para Linux, como para Windows:
 1. Abrir la carpeta
@@ -14,6 +20,9 @@ Una vez que estemos viendo la terminal en pantalla debemos ejecutar el siguiente
 python -m http.server 8000
 
 Habiendo hecho esto, podremos acceder a las visualizaciones utilizando cualquier navegador, buscando la siguiente ruta:
+
+IMPORTANTE: Es recomendable usar un navegador de incognito para ejecutar esto, y luego 
+al querer abrir otro servidor para otra visualizacion, cerrar y abrir otra ventana de incognito.
 
 http://localhost:8000/#
 
