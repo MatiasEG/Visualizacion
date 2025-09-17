@@ -55,27 +55,27 @@ function topCategoriesWithVotes(data, topN = 4, maxVotes) {
     const result = {};
 
     top.forEach(([genre, val]) => {
-    const cat = votesCategory(val.votes, maxVotes);
-    result[genre] = {
-        children: [{
-            name: cat.label,
-            value: val.count,      // <-- usar count en lugar de votes
-            itemStyle: { color: cat.color }
-        }]
-    };
-});
+        const cat = votesCategory(val.votes, maxVotes);
+        result[genre] = {
+            children: [{
+                name: cat.label,
+                value: val.count,
+                itemStyle: { color: cat.color }
+            }]
+        };
+    });
 
-if (others.length > 0) {
-    const totalCount = others.reduce((sum, [, val]) => sum + val.count, 0);
-    const cat = votesCategory(others.reduce((sum, [, val]) => sum + val.votes, 0), maxVotes);
-    result["Otros"] = {
-        children: [{
-            name: cat.label,
-            value: totalCount,     // <-- usar count aquí también
-            itemStyle: { color: cat.color }
-        }]
-    };
-}
+    if (others.length > 0) {
+        const totalCount = others.reduce((sum, [, val]) => sum + val.count, 0);
+        const cat = votesCategory(others.reduce((sum, [, val]) => sum + val.votes, 0), maxVotes);
+        result["Otros"] = {
+            children: [{
+                name: cat.label,
+                value: totalCount,
+                itemStyle: { color: cat.color }
+            }]
+        };
+    }
 
     return result;
 }
@@ -84,8 +84,8 @@ if (others.length > 0) {
 fetch('data.json')
 .then(response => response.json())
 .then(data => {
-    // Filtrar películas con al menos 50 votos
-    const filtered = data.filter(d => parseInt(d.numVotes) >= 50);
+    // Filtrar películas con al menos 500 votos
+    const filtered = data.filter(d => parseInt(d.numVotes) >= 500);
 
     const sunburstData = {};
     let maxVotes = 0;
@@ -185,15 +185,15 @@ fetch('data.json')
             label: {
               fontSize: 10,
               padding: 30,
-              align: 'right',      // Alineación del texto
+              align: 'right',
               formatter: '{b}',
               hideOverlap: true
             },
             labelLine: {
-              show: true,      // Muestra línea de conexión (flecha)
-              length: 15,      // Largo de la línea horizontal
-              length2: 15,     // Largo de la línea radial
-              smooth: true     // Línea curva suave
+              show: true,
+              length: 15,
+              length2: 15,
+              smooth: true
             },
             itemStyle: {
               borderWidth: 3
@@ -223,9 +223,9 @@ fetch('data.json')
       },
       tooltip: {
           formatter: function(info) {
-              const level = info.treePathInfo.length; // 1 = primer nivel, 2 = segundo, etc.
+              const level = info.treePathInfo.length;
               switch(level) {
-                  case 2:
+                  case 2: // primer nivel
                       return `Rating: ${info.name}`;
                   case 3:
                       return `Duración: ${info.name}`;
