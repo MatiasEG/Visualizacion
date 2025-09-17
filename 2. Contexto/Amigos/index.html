@@ -16,7 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 </head>
 <body>
-  <h1>Análisis de géneros por año — rating vs "taquilla" (numVotes)</h1>
+  <h1>Análisis de géneros por año — rating vs taquilla/votos</h1>
   <div id="controls">
     <label class="hint">Mostrar hasta</label>
     <input id="topGenres" type="number" min="1" max="50" value="8" style="width:72px;" />
@@ -149,7 +149,7 @@
         const legendNames = series.map(s => s.name);
 
       const option = {
-        title: { text: 'Rating promedio ponderado por votos — puntos = año (tamaño = votos)', left: 'center' },
+        title: { text: 'Rating promedio ponderado por votos + Puntos por año (tamaño = votos)', left: 'center' },
         tooltip: {
           trigger: 'item',
           formatter: function (params) {
@@ -186,7 +186,7 @@
           axisLabel: { formatter: '{value}' }
         },
         yAxis: {
-          name: 'Rating promedio (ponderado por votos)',
+          name: 'Rating',
           min: 0,
           max: 10
         },
